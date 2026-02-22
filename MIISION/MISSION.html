@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MISSION M</title>
+    <style>
+        /* ==========================================================================
+           1. CORE VARIABLES & DESIGN TOKENS
+           ========================================================================== */
+        :root {
+            --bg-void: #000000; 
+            --bg-grid: rgba(0, 255, 136, 0.03);
+            --bg-glass: rgba(10, 14, 20, 0.85);
+            --bg-node: rgba(15, 20, 30, 0.95);
+            
+            --c-locked: #1a202c;
+            --c-ready: #2d3748;
+            --c-focus: #f59e0b;
+            --c-success: #10b981;
+            
+            --t-green: #10b981;
+            --t-yellow: #f59e0b;
+            --t-red: #ef4444;
+            --t-violet: #8b5cf6;
+            --t-obsidian: #ffffff;
+            
+            --text-pure: #f8fafc;
+            --text-muted: #64748b;
+            
+            --charge-ratio: 0;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        /* ==========================================================================
+           2. RESET & FOND LIQUIDE SOMBRE
+           ========================================================================== */
+        body, html {
+            background-color: var(--bg-void);
+            color: var(--text-pure);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            width: 100vw; height: 100vh;
+            overflow: hidden; 
+            user-select: none; 
+            -webkit-font-smoothing: antialiased;
+
+            /* INTÉGRATION DE TON IMAGE LIQUID.jpg */
+            background-image: 
+                /* Léger voile sombre (40%) pour garantir que les néons flashent bien */
+                linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)),
+                url('LIQUID.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }
+
+        /* ==========================================================================
+           3. L'ESPACE DE JEU (VIEWPORT & MAP)
+           ========================================================================== */
+        #viewport {
+            width: 100%; height: calc(100vh - 80px);
+            overflow: auto; position: relative;
+            background-color: transparent; 
+            
+            /* Grille technique ultra-fine par-dessus le liquide + Vignettage noir sur les bords */
+            background-image: 
+                linear-gradient(rgba(0, 255, 136, 0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 136, 0.015) 1px, transparent 1px),
+                radial-gradient(circle at center, transparent 40%, rgba(0, 0, 0, 0.85) 100%);
+            background-size: 60px 60px, 60px 60px, 100% 100%;
+            background-attachment: fixed;
+            
+            scroll-behavior: smooth;
+            box-shadow: inset 0 0 100px rgba(0,0,0,0.9);
+        }
+
+           #quest-world {
+            position: absolute;
+            width: 5000px; 
+            height: 3500px;
+            padding: 500px; 
+            
+            /* --- LE RÉGLAGE ANTI-MAL DE TÊTE --- */
+            transform: scale(0.50); /* Réduit à 50% de la taille pour voir tout l'Empire */
+            transform-origin: top left; /* Indispensable pour que le scroll fonctionne encore */
+        
+        }
+
+        svg#line-layer {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none; z-index: 1;
+        }
+
+        /* ==========================================================================
+           4. LES QUÊTES (NODES) - DESIGN AAA
+           ========================================================================== */
+        .node {
+            position: absolute; width: 260px; min-height: 120px;
+            background: var(--bg-node);
+            border: 2px solid var(--c-locked); border-radius: 20px;
+            padding: 24px 20px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 10;
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.4s ease, box-shadow 0.4s ease, filter 0.4s ease, opacity 0.4s ease;
+            opacity: 0.2; filter: grayscale(1) blur(1px);
+            cursor: not-allowed;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            overflow: hidden; 
+        }
+
+        .node::before {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(
+                circle at center, 
+                rgba(16, 185, 129, calc(var(--charge-ratio) * 0.4)) 0%, 
+                transparent calc(var(--charge-ratio) * 120%)
+            );
+            z-index: -1; transition: background 0.8s ease-out;
+        }
+
+        .node.available { opacity: 1; filter: grayscale(0) blur(0); border-color: var(--c-ready); cursor: pointer; }
+        .node.available:hover { border-color: #4a5568; transform: translateY(-2px); }
+        .node.active { border-color: var(--c-focus); transform: translateY(-8px) scale(1.03); box-shadow: 0 15px 35px rgba(245, 158, 11, 0.15), inset 0 0 15px rgba(245, 158, 11, 0.05); }
+        .node.completed {
+            opacity: 1; filter: grayscale(0) blur(0); border-color: var(--c-success);
+            background: rgba(16, 185, 129, 0.05); color: var(--c-success);
+            box-shadow: 0 0 25px rgba(16, 185, 129, 0.2);
+            --charge-ratio: 1 !important; 
+        }
+
+        .node.boss { width: 380px; min-height: 200px; border-width: 3px; border-radius: 30px; }
+        .node.boss h3 { font-size: 1.4rem; letter-spacing: 4px; }
+        .node .cat { font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 3px; margin-bottom: 12px; }
+        .node h3 { margin: 0; font-size: 1.1rem; text-align: center; line-height: 1.4; font-weight: 800; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        
+        .hold-progress {
+            position: absolute; bottom: 0; left: 0; height: 5px;
+            background: var(--c-success); width: 0%;
+            box-shadow: 0 -2px 10px var(--c-success); transition: width 0.1s linear; 
+        }
+
+        /* ==========================================================================
+           5. INTERFACE DE COMMANDEMENT (FOOTER & TIMER)
+           ========================================================================== */
+        #footer-panel {
+            position: fixed; bottom: 0; left: 0; width: 100vw; height: 80px;
+            background: var(--bg-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255,255,255,0.05);
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 50px; z-index: 1000; box-shadow: 0 -10px 50px rgba(0,0,0,0.8);
+        }
+
+        #timer-zone { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .timer-label { font-size: 0.65rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 4px; margin-bottom: 4px; }
+        #countdown { font-size: 2.2rem; font-weight: 900; letter-spacing: 6px; font-variant-numeric: tabular-nums; transition: color 0.5s ease, text-shadow 0.5s ease; }
+
+        .t-green    { color: var(--t-green); text-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+        .t-yellow   { color: var(--t-yellow); text-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
+        .t-red      { color: var(--t-red); text-shadow: 0 0 20px rgba(239, 68, 68, 0.6); }
+        .t-violet   { color: var(--t-violet); text-shadow: 0 0 25px rgba(139, 92, 246, 0.7); }
+        .t-obsidian { color: var(--bg-void); background: var(--t-obsidian); padding: 2px 20px; border-radius: 8px; box-shadow: 0 0 30px rgba(255,255,255,0.8); animation: pulse-doom 1.5s infinite alternate ease-in-out; }
+        @keyframes pulse-doom { 0% { box-shadow: 0 0 20px rgba(255,255,255,0.5); transform: scale(1); } 100% { box-shadow: 0 0 50px rgba(255,255,255,1); transform: scale(1.02); } }
+
+        .btn-system {
+            background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--t-red); padding: 10px 24px; border-radius: 8px;
+            font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
+            cursor: pointer; transition: all 0.3s ease;
+        }
+        .btn-system:hover { background: var(--t-red); color: var(--text-pure); box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
+
+        #hud-title { position: fixed; top: 40px; left: 40px; z-index: 999; pointer-events: none; }
+        #hud-title h1 { font-size: 1.5rem; letter-spacing: 6px; font-weight: 900; margin: 0; text-shadow: 0 5px 15px rgba(0,0,0,0.8); }
+        #hud-title .status { font-size: 0.7rem; color: var(--c-success); letter-spacing: 4px; font-weight: 800; }
+
+        /* ==========================================================================
+           6. ÉCRAN DE VICTOIRE (L'ACCOMPLISSEMENT)
+           ========================================================================== */
+        #victory-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(1, 2, 4, 0.9);
+            backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
+            z-index: 9999;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none; transition: opacity 1.5s ease-in-out;
+        }
+        #victory-overlay.show { opacity: 1; pointer-events: auto; }
+        #victory-overlay h1 {
+            font-size: 5rem; font-weight: 900; color: var(--c-success);
+            text-transform: uppercase; letter-spacing: 15px; margin-bottom: 20px;
+            text-shadow: 0 0 50px rgba(16, 185, 129, 0.8);
+            animation: victory-pulse 3s infinite alternate ease-in-out;
+        }
+        #victory-overlay p { font-size: 1.5rem; color: var(--text-pure); letter-spacing: 5px; text-transform: uppercase; text-shadow: 0 0 10px rgba(255,255,255,0.5); }
+        @keyframes victory-pulse { 0% { transform: scale(1); text-shadow: 0 0 30px rgba(16, 185, 129, 0.5); } 100% { transform: scale(1.05); text-shadow: 0 0 80px rgba(16, 185, 129, 1); } }
+
+        /* ==========================================================================
+           7. SCROLLBARS PERSONNALISÉES (Détail Premium)
+           ========================================================================== */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-void); }
+        ::-webkit-scrollbar-thumb { background: var(--c-ready); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        /* ==========================================================================
+           8. SPLASH SCREEN (ÉCRAN DE DÉMARRAGE - 3 SECONDES)
+           ========================================================================== */
+        #splash-screen {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: #000000; z-index: 10000;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            transition: opacity 1s ease-in-out, visibility 1s ease-in-out;
+        }
+        #splash-screen.hidden { opacity: 0; visibility: hidden; }
+        #splash-title {
+            font-size: 1.2rem; color: var(--text-muted); text-transform: uppercase;
+            letter-spacing: 12px; margin-bottom: 20px;
+        }
+        #splash-timer {
+            font-size: 5rem; font-weight: 900; letter-spacing: 10px; font-variant-numeric: tabular-nums;
+            color: var(--t-green); text-shadow: 0 0 40px rgba(16, 185, 129, 0.6);
+            text-align: center; transition: color 0.5s ease, text-shadow 0.5s ease;
+        }
+        #splash-timer.t-yellow { color: var(--t-yellow); text-shadow: 0 0 40px rgba(245, 158, 11, 0.6); }
+        #splash-timer.t-red { color: var(--t-red); text-shadow: 0 0 50px rgba(239, 68, 68, 0.8); }
+        #splash-timer.t-violet { color: var(--t-violet); text-shadow: 0 0 60px rgba(139, 92, 246, 0.9); }
+        #splash-timer.t-obsidian { 
+            color: #000; background: #fff; padding: 10px 40px; border-radius: 20px; 
+            box-shadow: 0 0 80px rgba(255,255,255,1); 
+        }
+    </style>
+</head>
+</head>
+<body>
+    <div id="splash-screen">
+        <div id="splash-title">TEMPS RESTANT AVANT L'OBJECTIF</div>
+        <div id="splash-timer" class="t-green">CALCUL...</div>
+    </div>
+
+    <div id="hud-title">
+        <h1>MISSION-M</h1>
+        <div class="status">Projet d'une vie</div>
+    </div>
+
+    <div id="viewport">
+        <div id="quest-world">
+            <svg id="line-layer"></svg>
+            </div>
+    </div>
+
+    <div id="footer-panel">
+        <button class="btn-system" onclick="clearAllProgress()">Formatage du Destin</button>
+        
+        <div id="timer-zone">
+            <div class="timer-label">Objectif Final : 01 Janvier 2029</div>
+            <div id="countdown" class="t-green">CALCUL EN COURS...</div>
+        </div>
+        
+        <div style="width: 220px;"></div>
+    </div>
+
+
+    <script>
+    /* 1. BASE DE DONNÉES SPATIALE (Espacement Maximal) */
+        const questData = [
+            // --- LIGNE CENTRALE : SCOLARITÉ (Y = 1400) ---
+            { id: 'but1', cat: 'Scolaire', title: 'VALIDER BUT 1', x: 400, y: 1400, reqs: [] },
+            { id: 'but2', cat: 'Scolaire', title: 'VALIDER BUT 2', x: 900, y: 1400, reqs: ['but1'] },
+            { id: 'alt', cat: 'Carrière', title: 'TROUVER ALTERNANCE', x: 1400, y: 1200, reqs: ['but2'] },
+            { id: 'but3', cat: 'Scolaire', title: 'VALIDER BUT 3', x: 1400, y: 1600, reqs: ['but2'] },
+            { id: 'cdi', cat: 'Elite', title: 'SIGNATURE CDI', x: 1900, y: 1400, reqs: ['alt', 'but3'] },
+
+            // --- LIGNE ARGENT (Y = 1800) ---
+            { id: 'm16', cat: 'Trésor', title: '16 000 € (START)', x: 400, y: 1800, reqs: [] },
+            { id: 'm18', cat: 'Trésor', title: 'PALIER 18 000 €', x: 900, y: 1800, reqs: ['m16'] },
+            { id: 'm20', cat: 'Trésor', title: 'PALIER 20 000 €', x: 1400, y: 1800, reqs: ['m18'] },
+            { id: 'm22', cat: 'Trésor', title: 'PALIER 22 000 €', x: 1900, y: 1800, reqs: ['m20'] },
+            { id: 'm25', cat: 'Trésor', title: 'TRÉSOR 25 000 €', x: 2400, y: 1800, reqs: ['m22', 'cdi'] },
+
+            // --- BRANCHE NORD : RELIGION (Très haut : Y = 200) ---
+            { id: 'nonsfw', cat: 'Religion', title: 'NO NSFW / PORNO', x: 1400, y: 200, reqs: [] },
+            { id: 'priere', cat: 'Religion', title: '5 PRIÈRES / HEURE', x: 1900, y: 200, reqs: [] },
+            { id: 'coran', cat: 'Religion', title: 'LECTURE CORAN', x: 2400, y: 200, reqs: [] },
+            // Le Boss "Maturité" redescend pour alimenter la Femme (Y=700)
+            { id: 'maturite', cat: 'Succès', title: 'RELIGION & MATURITÉ', x: 2900, y: 700, reqs: ['nonsfw', 'priere', 'coran'] },
+
+            // --- BRANCHE SUD : PHYSIQUE (Très bas : Y = 2600) ---
+            { id: 'dos', cat: 'Physique', title: 'DOS EN V', x: 1400, y: 2600, reqs: [] },
+            { id: 'pec', cat: 'Physique', title: 'PEC + ABDOS', x: 1900, y: 2600, reqs: [] },
+            { id: 'bras', cat: 'Physique', title: 'AVANT-BRAS', x: 2400, y: 2600, reqs: [] },
+            { id: 'soups', cat: 'Physique', title: 'SOUPLESSE', x: 2900, y: 2600, reqs: [] },
+            // Le Boss "Athlétique" remonte pour alimenter la Femme (Y=2100)
+            { id: 'athletic', cat: 'Succès', title: 'CORPS ATHLÉTIQUE', x: 2900, y: 2100, reqs: ['dos', 'pec', 'bras', 'soups'] },
+
+            // --- CONVERGENCE : IMAGE & FEMME ---
+            { id: 'tel', cat: 'Outils', title: 'ACHAT SMARTPHONE', x: 1400, y: 900, reqs: ['but1'] },
+            { id: 'insta', cat: 'Image', title: 'RÉSEAUX PROPRES', x: 2100, y: 900, reqs: ['tel'] },
+            // La Femme (Mini-Boss) absorbe l'Image, l'Athlétisme et la Maturité
+            { id: 'femme', cat: 'Mid-Boss', title: 'TROUVER FEMME', x: 3500, y: 1000, reqs: ['insta', 'athletic', 'maturite'] },
+
+            // --- FINALITÉ : LE MARIAGE (Objectif Ultime) ---
+            { id: 'mariage', cat: 'DESTIN', title: '💍 MARIAGE IDÉAL', x: 4100, y: 1400, reqs: ['cdi', 'm25', 'femme'], isBoss: true }
+        ];
+        
+        /* 2. VARIABLES GLOBALES & INITIALISATION */
+        const world = document.getElementById('quest-world');
+        const svg = document.getElementById('line-layer');
+        let holdTimer; // Chrono pour le clic long
+
+        function init() {
+            // Génération des boîtes
+            questData.forEach(q => {
+                const node = document.createElement('div');
+                node.id = q.id;
+                node.className = 'node' + (q.isBoss ? ' boss' : '');
+                node.style.left = q.x + 'px';
+                node.style.top = q.y + 'px';
+                
+                node.innerHTML = `
+                    <div class="cat">${q.cat}</div>
+                    <h3>${q.title}</h3>
+                    <div class="hold-progress" id="progress-${q.id}"></div>
+                `;
+
+                // Events tactiles/souris
+                node.addEventListener('mousedown', () => startHold(q.id));
+                node.addEventListener('mouseup', () => cancelHold(q.id));
+                node.addEventListener('mouseleave', () => cancelHold(q.id));
+                node.addEventListener('click', () => toggleFocus(q.id));
+                
+                world.appendChild(node);
+            });
+
+            // Lancement des systèmes
+            refresh();
+            updateTimer();
+            setInterval(updateTimer, 1000); // Met à jour le timer chaque seconde
+
+            // Centrage de la caméra au démarrage
+            window.onload = () => {
+                const v = document.getElementById('viewport');
+                v.scrollLeft = 100; 
+                v.scrollTop = 800; 
+            };
+            // AJOUTE JUSTE CE BLOC ICI : Fait disparaître l'écran après 3 secondes (3000 ms)
+            setTimeout(() => {
+                const splash = document.getElementById('splash-screen');
+                if(splash) splash.classList.add('hidden');
+            }, 3000);
+        
+        }
+
+       /* 3. NOUVEAU TIMER (Format Demandé + Splash Screen) */
+        function updateTimer() {
+            const target = new Date('2029-01-01T00:00:00');
+            const now = new Date();
+            const diff = target - now;
+            
+            const timerEl = document.getElementById('countdown');
+            const splashTimerEl = document.getElementById('splash-timer'); // Le timer géant
+
+            if (diff <= 0) {
+                if(timerEl) { timerEl.innerText = "TEMPS ÉCOULÉ"; timerEl.className = 't-obsidian'; }
+                if(splashTimerEl) { splashTimerEl.innerText = "TEMPS ÉCOULÉ"; splashTimerEl.className = 't-obsidian'; }
+                return;
+            }
+
+            // Calculs
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+            const mins = Math.floor((diff / 1000 / 60) % 60);
+            const secs = Math.floor((diff / 1000) % 60);
+
+            const timeString = `${days} JOURS  ${hours} H  ${mins} M  ${secs} S`;
+
+            // Injection du texte
+            if(timerEl) timerEl.innerText = timeString;
+            if(splashTimerEl) splashTimerEl.innerText = timeString;
+
+            // Gestion des couleurs d'urgence
+            let colorClass = '';
+            if (days > 730) colorClass = 't-green';
+            else if (days > 365) colorClass = 't-yellow';
+            else if (days > 100) colorClass = 't-red';
+            else if (days > 50) colorClass = 't-violet';
+            else colorClass = 't-obsidian';
+
+            // Application des couleurs
+            if(timerEl) timerEl.className = colorClass;
+            if(splashTimerEl) splashTimerEl.className = colorClass;
+        }
+
+        /* 4. MOTEUR DE RENDU & LUEUR PROGRESSIVE */
+        function refresh() {
+            svg.innerHTML = ''; // Nettoyage des lignes
+            
+            questData.forEach(q => {
+                const el = document.getElementById(q.id);
+                const isDone = localStorage.getItem(q.id) === 'done';
+                const isFocused = localStorage.getItem(q.id + '_focus') === 'true';
+                
+                // Compte combien de pré-requis sont validés
+                const doneReqs = q.reqs.filter(id => localStorage.getItem(id) === 'done');
+                
+                // --- LUEUR PROGRESSIVE (Charge Ratio) ---
+                // Calcule le pourcentage (ex: 2 sur 4 = 0.5). Si c'est fini, c'est 1.
+                const ratio = q.reqs.length > 0 ? (doneReqs.length / q.reqs.length) : 0;
+                el.style.setProperty('--charge-ratio', isDone ? 1 : ratio);
+
+                // Est-ce que tout est prêt pour débloquer ?
+                const canUnlock = (doneReqs.length === q.reqs.length);
+
+                // Application des états visuels (CSS)
+                if (isDone) {
+                    el.className = 'node completed' + (q.isBoss ? ' boss' : '');
+                } else if (canUnlock || q.reqs.length === 0) {
+                    el.className = 'node available' + (isFocused ? ' active' : '') + (q.isBoss ? ' boss' : '');
+                } else {
+                    el.className = 'node' + (q.isBoss ? ' boss' : '');
+                }
+
+                // Dessin des lignes SI le parent est validé
+                q.reqs.forEach(reqId => {
+                    if (localStorage.getItem(reqId) === 'done') {
+                        drawSmartCurve(document.getElementById(reqId), el);
+                    }
+                });
+            });
+        }
+
+        /* 5. TRACEUR INTELLIGENT (Anti-coupure) */
+        function drawSmartCurve(sNode, eNode) {
+            const start = { x: sNode.offsetLeft, y: sNode.offsetTop, w: sNode.offsetWidth, h: sNode.offsetHeight };
+            const end = { x: eNode.offsetLeft, y: eNode.offsetTop, w: eNode.offsetWidth, h: eNode.offsetHeight };
+
+            let x1, y1, x2, y2, cp1x, cp1y, cp2x, cp2y;
+            const offset = 80;
+
+            // Détection de la position relative
+            const isBelow = end.y > start.y + start.h + 50; // Ajout d'une marge de sécurité
+            const isAbove = end.y + end.h < start.y - 50;
+
+            if (isBelow) {
+                // Le parent est nettement au-dessus (ex: Physique Bases -> Boss)
+                x1 = start.x + start.w / 2; y1 = start.y + start.h;
+                x2 = end.x + end.w / 2;     y2 = end.y;
+                cp1x = x1; cp1y = y1 + offset;
+                cp2x = x2; cp2y = y2 - offset;
+            } else if (isAbove) {
+                // Le parent est nettement en-dessous (ex: Religion Bases -> Boss)
+                x1 = start.x + start.w / 2; y1 = start.y;
+                x2 = end.x + end.w / 2;     y2 = end.y + end.h;
+                cp1x = x1; cp1y = y1 - offset;
+                cp2x = x2; cp2y = y2 + offset;
+            } else {
+                // Latéral classique
+                x1 = start.x + start.w;     y1 = start.y + start.h / 2;
+                x2 = end.x;                 y2 = end.y + end.h / 2;
+                cp1x = x1 + offset; cp1y = y1;
+                cp2x = x2 - offset; cp2y = y2;
+            }
+
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`);
+            path.setAttribute("fill", "none");
+            path.setAttribute("stroke", "var(--c-success)");
+            path.setAttribute("stroke-width", "3");
+            path.setAttribute("style", "filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.6)); opacity: 0.9;");
+            svg.appendChild(path);
+        }
+
+        /* 6. INTERACTIONS & SAUVEGARDE */
+        
+        // Clic Long (Validation/Annulation)
+        function startHold(id) {
+            const el = document.getElementById(id);
+            const isDone = localStorage.getItem(id) === 'done';
+            
+            if (!el.classList.contains('available') && !isDone) return;
+
+            const bar = document.getElementById('progress-' + id);
+            bar.style.transition = 'width 1s linear';
+            bar.style.width = '100%';
+
+            holdTimer = setTimeout(() => {
+                if (isDone) {
+                    localStorage.removeItem(id);
+                    cascadeReset(id); // Si on annule, on casse la chaîne
+                } else {
+                    localStorage.setItem(id, 'done');
+                    localStorage.setItem(id + '_focus', 'false');
+                }
+                refresh();
+            }, 1000);
+        }
+
+        // Annulation du clic long
+        function cancelHold(id) {
+            clearTimeout(holdTimer);
+            const bar = document.getElementById('progress-' + id);
+            if (bar) { bar.style.transition = 'none'; bar.style.width = '0%'; }
+        }
+
+        // Clic Simple (Focus)
+        function toggleFocus(id) {
+            const el = document.getElementById(id);
+            if (el.classList.contains('available') && !el.classList.contains('completed')) {
+                const isCurrentlyFocused = localStorage.getItem(id + '_focus') === 'true';
+                localStorage.setItem(id + '_focus', !isCurrentlyFocused);
+                refresh();
+            }
+        }
+
+        // Cascade : Réinitialise les enfants si le parent est annulé
+        function cascadeReset(parentId) {
+            questData.forEach(q => {
+                if (q.reqs.includes(parentId) && localStorage.getItem(q.id) === 'done') {
+                    localStorage.removeItem(q.id);
+                    cascadeReset(q.id);
+                }
+            });
+        }
+
+        // Bouton Reset Total
+        function clearAllProgress() {
+            if (confirm("⚠️ FORMATAGE DU SYSTÈME ⚠️\n\nConfirmer la suppression totale de la progression ?")) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+
+        // DÉMARRAGE
+        init();
+
+    </script>
+</body>
+</html>
